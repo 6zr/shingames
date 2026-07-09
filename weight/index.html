@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>社長スクワット防衛線 - 居合い斬り</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            background-color: #0d0d12;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen text-white font-sans">
+
+    <!-- ゲームコンテナ -->
+    <div class="relative w-full max-w-md h-[92vh] bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border-4 border-amber-500 flex flex-col">
+        
+        <!-- ヘッダーUI -->
+        <div class="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent z-10 flex justify-between items-center pointer-events-none">
+            <div>
+                <div class="text-xs text-amber-400 font-bold tracking-wider">社長の体重 (TARGET: < 105kg)</div>
+                <div class="flex items-center gap-2">
+                    <span id="weight-display" class="text-2xl font-black text-white">100.0 kg</span>
+                    <span id="weight-change" class="text-sm font-bold transition-all duration-300"></span>
+                </div>
+            </div>
+            <div class="text-right">
+                <div class="text-xs text-gray-400 font-bold">斬撃数 (SCORE)</div>
+                <div id="score-display" class="text-2xl font-black text-amber-500">0</div>
+            </div>
+        </div>
+
+        <!-- 音声ON/OFF、リセットなど -->
+        <div class="absolute top-16 right-4 z-10 flex gap-2">
+            <button id="sound-btn" class="bg-slate-800/80 hover:bg-slate-700 text-white px-3 py-1 rounded-full text-xs font-bold border border-slate-600 transition-colors">
+                🔊 音声: ON
+            </button>
+        </div>
+
+        <!-- ゲームキャンバス -->
+        <canvas id="gameCanvas" class="w-full h-full cursor-crosshair"></canvas>
+
+        <!-- 開始画面オーバーレイ -->
+        <div id="start-screen" class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-6 text-center z-20">
+            <div class="border-2 border-amber-500 p-2 rounded-xl mb-4 bg-amber-950/20">
+                <span class="text-amber-500 font-bold text-xs tracking-widest px-2 py-1">SPECIAL ACTION GAME</span>
+            </div>
+            <h1 class="text-3xl font-extrabold tracking-tight mb-2 text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-amber-400 to-yellow-500">
+                社長スクワット防衛線
+            </h1>
+            <p class="text-xs text-gray-400 mb-6 font-bold leading-relaxed">
+                〜 居合いで、社長の増量を阻止せよ！ 〜
+            </p>
+
+            <div class="bg-slate-800/80 p-4 rounded-xl text-left text-sm max-w-xs space-y-3 border border-slate-700 mb-6">
+                <div class="flex items-start gap-2">
+                    <span class="text-xl">🏋️</span>
+                    <p class="text-xs text-gray-300">下部で<strong>社長</strong>がスクワット中。放置すると1秒に0.1kg痩せますが、落ちてくる高カロリー食を食べると激太りします。</p>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="text-xl">⚔️</span>
+                    <p class="text-xs text-gray-300">画面を<strong>ドラッグ／スワイプ</strong>して、<strong>居合い斬り</strong>で降ってくる食べ物を破壊してください。</p>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="text-xl">🥛</span>
+                    <p class="text-xs text-gray-300"><strong>プロテイン</strong>や<strong>ダンベル</strong>は食べさせてOK（むしろ痩せます）。スルーしましょう！</p>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="text-danger text-xl">⚠️</span>
+                    <p class="text-xs text-red-400">体重が<strong>150kg</strong>に達するとデブ化によりギブアップ（ゲームオーバー）！</p>
+                </div>
+            </div>
+
+            <button id="start-btn" class="w-full max-w-xs bg-gradient-to-r from-red-600 to-amber-500 hover:from-red-500 hover:to-amber-400 text-white font-black py-4 px-8 rounded-full shadow-lg shadow-red-900/40 text-lg transition-transform active:scale-95">
+                滾るぜ！試合開始
+            </button>
+        </div>
+
+        <!-- ゲームオーバー画面オーバーレイ -->
+        <div id="gameover-screen" class="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-6 text-center z-20 hidden">
+            <h2 class="text-4xl font-black text-red-600 mb-2">GIVE UP!!</h2>
+            <p class="text-gray-400 text-sm mb-6">社長の増量が限界を超えた（150kg突破）</p>
+            
+            <div class="bg-slate-800/80 p-6 rounded-2xl border border-red-500/30 max-w-xs w-full mb-8">
+                <p class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">最終防衛スコア</p>
+                <p id="final-score" class="text-4xl font-extrabold text-amber-500 mb-4">0 斬</p>
+                <p class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">最終体重</p>
+                <p id="final-weight" class="text-2xl font-bold text-white">150.2 kg</p>
+            </div>
+
+            <button id="restart-btn" class="w-full max-w-xs bg-slate-800 hover:bg-slate-700 text-white border-2 border-amber-500 font-bold py-3 px-8 rounded-full transition-transform active:scale-95">
+                もう一度挑戦する
+            </button>
+        </div>
+
+    </div>
+
+    <!-- Web Audio API を用いた効果音シンセサイザー -->
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let soundEnabled = true;
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+
+            if (type === 'slash') {
+                // 鋭い金属音（ハイパス系）
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(1200, now);
+                osc.frequency.exponentialRampToValueAtTime(100, now + 0.15);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                osc.start(now);
+                osc.stop(now + 0.15);
+            } else if (type === 'eat_bad') {
+                // 太る音（鈍い破裂音＋下降音）
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, now);
+                osc.frequency.linearRampToValueAtTime(80, now + 0.3);
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+                osc.start(now);
+                osc.stop(now + 0.35);
+            } else if (type === 'eat_good') {
+                // プロテイン（さわやかな上昇アルペジオ）
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.setValueAtTime(450, now + 0.08);
+                osc.frequency.setValueAtTime(600, now + 0.16);
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } else if (type === 'gameover') {
+                // ギブアップ（ゴングを模した不協和音）
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.connect(gain2);
+                gain2.connect(audioCtx.destination);
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.linearRampToValueAtTime(110, now + 1.0);
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
+
+                osc2.type = 'triangle';
+                osc2.frequency.setValueAtTime(225, now);
+                osc2.frequency.linearRampToValueAtTime(112, now + 1.0);
+                gain2.gain.setValueAtTime(0.4, now);
+                gain2.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
+
+                osc.start(now);
+                osc2.start(now);
+                osc.stop(now + 1.2);
+                osc2.stop(now + 1.2);
+            }
+        }
+
+        // 音声切り替えボタン
+        const soundBtn = document.getElementById('sound-btn');
+        soundBtn.addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            soundBtn.textContent = soundEnabled ? '🔊 音声: ON' : '🔇 音声: OFF';
+            soundBtn.classList.toggle('bg-slate-800/80', soundEnabled);
+            soundBtn.classList.toggle('bg-red-950/80', !soundEnabled);
+        });
+    </script>
+
+    <!-- メインゲームロジック -->
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // キャンバスサイズ設定（高解像度対応）
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        
+        // 初回サイズ反映
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // ゲームステート
+        let state = 'start'; // start, playing, gameover
+        let score = 0;
+        let weight = 100.0; // 開始体重
+
+        // オブジェクト管理
+        let foodItems = [];
+        let particles = [];
+        let slashLine = null; // 現在のドラッグ線 {start: {x, y}, end: {x, y}, age: 0}
+        let floatingTexts = []; // スコアやセリフ等の表示
+
+        // キャラクターステート
+        let squatCycle = 0; // 社長のスクワット用カウンター
+        let nakamuraX = 200; // shinの立ち位置（目標位置に滑らかに追従）
+        let nakamuraTargetX = 200;
+        let nakamuraSlashCooldown = 0; // 斬撃モーションの演出用
+
+        // 定数
+        const MAX_WEIGHT = 150.0;
+        const MIN_WEIGHT = 75.0; // 引き締まり限界
+
+        // 食材の種類定義
+        const FOOD_TYPES = [
+            { emoji: '🍜', name: 'ラーメン', calories: 5.0, isBad: true, speedMult: 1.0 },
+            { emoji: '🍰', name: 'ケーキ', calories: 4.0, isBad: true, speedMult: 1.1 },
+            { emoji: '🍕', name: 'ピザ', calories: 4.5, isBad: true, speedMult: 0.95 },
+            { emoji: '🍔', name: 'ハンバーガー', calories: 4.8, isBad: true, speedMult: 1.05 },
+            { emoji: '🍺', name: 'ビール', calories: 3.0, isBad: true, speedMult: 1.2 },
+            { emoji: '🍩', name: 'ドーナツ', calories: 3.5, isBad: true, speedMult: 1.15 },
+            // 良質アイテム（スルーすべきもの）
+            { emoji: '🥛', name: 'プロテイン', calories: -6.0, isBad: false, speedMult: 1.0 },
+            { emoji: '🏋️', name: 'ダンベル', calories: -8.0, isBad: false, speedMult: 1.1 }
+        ];
+
+        // 各種要素取得
+        const startScreen = document.getElementById('start-screen');
+        const gameoverScreen = document.getElementById('gameover-screen');
+        const startBtn = document.getElementById('start-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const weightDisplay = document.getElementById('weight-display');
+        const weightChange = document.getElementById('weight-change');
+        const scoreDisplay = document.getElementById('score-display');
+        const finalScore = document.getElementById('final-score');
+        const finalWeight = document.getElementById('final-weight');
+
+        // ゲーム初期化
+        function initGame() {
+            score = 0;
+            weight = 100.0;
+            foodItems = [];
+            particles = [];
+            floatingTexts = [];
+            squatCycle = 0;
+            nakamuraX = canvas.width / (2 * window.devicePixelRatio);
+            nakamuraTargetX = nakamuraX;
+            nakamuraSlashCooldown = 0;
+
+            weightDisplay.textContent = '100.0 kg';
+            weightDisplay.className = 'text-2xl font-black text-white';
+            weightChange.textContent = '';
+            scoreDisplay.textContent = '0';
+
+            state = 'playing';
+            startScreen.classList.add('hidden');
+            gameoverScreen.classList.add('hidden');
+        }
+
+        // 浮遊テキスト追加用
+        function addFloatingText(text, x, y, color = '#ffffff') {
+            floatingTexts.push({
+                text: text,
+                x: x,
+                y: y,
+                vx: (Math.random() - 0.5) * 2,
+                vy: -1.5,
+                alpha: 1.0,
+                color: color
+            });
+        }
+
+        // 食材生成
+        let lastSpawnTime = 0;
+        function spawnFood(timestamp) {
+            // スコアに応じて徐々に生成速度を上げる
+            const spawnInterval = Math.max(400, 1500 - score * 20); 
+            if (timestamp - lastSpawnTime > spawnInterval) {
+                const rect = canvas.getBoundingClientRect();
+                const logicalWidth = rect.width;
+                const margin = 30;
+                const x = margin + Math.random() * (logicalWidth - margin * 2);
+                
+                // ランダムに食材を選択（良質アイテムの確率は25%）
+                const isGoodItem = Math.random() < 0.25;
+                let type;
+                if (isGoodItem) {
+                    const goods = FOOD_TYPES.filter(t => !t.isBad);
+                    type = goods[Math.floor(Math.random() * goods.length)];
+                } else {
+                    const bads = FOOD_TYPES.filter(t => t.isBad);
+                    type = bads[Math.floor(Math.random() * bads.length)];
+                }
+
+                foodItems.push({
+                    x: x,
+                    y: -40,
+                    type: type,
+                    speed: (2 + Math.random() * 2 + (score * 0.05)) * type.speedMult,
+                    size: 32,
+                    angle: Math.random() * Math.PI * 2,
+                    rotSpeed: (Math.random() - 0.5) * 0.05
+                });
+                lastSpawnTime = timestamp;
+            }
+        }
+
+        // スプラッシュエフェクト（カット時の火花）
+        function createCutParticles(x, y, color) {
+            for (let i = 0; i < 12; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2 + Math.random() * 4;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    size: 3 + Math.random() * 4,
+                    color: color,
+                    alpha: 1.0,
+                    life: 1.0,
+                    decay: 0.02 + Math.random() * 0.03
+                });
+            }
+        }
+
+        // 食材スライスカット処理
+        function checkSlash(x1, y1, x2, y2) {
+            let hitAny = false;
+            
+            // 線分と円の距離判定
+            for (let i = foodItems.length - 1; i >= 0; i--) {
+                const f = foodItems[i];
+                if (distToSegment({x: f.x, y: f.y}, {x: x1, y: y1}, {x: x2, y: y2}) < f.size) {
+                    // スライス成功！
+                    hitAny = true;
+                    playSound('slash');
+
+                    if (f.type.isBad) {
+                        // 悪い食べ物を破壊
+                        score++;
+                        scoreDisplay.textContent = score;
+                        createCutParticles(f.x, f.y, '#f59e0b');
+                        addFloatingText('SLICED!', f.x, f.y, '#34d399');
+                    } else {
+                        // 良質アイテム（プロテインなど）を壊してしまったペナルティ
+                        addFloatingText('MISS (プロテイン破壊)', f.x, f.y, '#f87171');
+                        createCutParticles(f.x, f.y, '#38bdf8');
+                        // ペナルティとして少し太る
+                        updateWeight(2.0);
+                    }
+                    
+                    foodItems.splice(i, 1);
+                }
+            }
+
+            if (hitAny) {
+                nakamuraSlashCooldown = 8; // 斬撃ポーズフラグ
+            }
+        }
+
+        // 線分と点の距離を求める補助関数
+        function distToSegment(p, v, w) {
+            const l2 = Math.pow(v.x - w.x, 2) + Math.pow(v.y - w.y, 2);
+            if (l2 === 0) return Math.sqrt(Math.pow(p.x - v.x, 2) + Math.pow(p.y - v.y, 2));
+            let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return Math.sqrt(Math.pow(p.x - (v.x + t * (w.x - v.x)), 2) + Math.pow(p.y - (v.y + t * (w.y - v.y)), 2));
+        }
+
+        // 体重更新処理
+        function updateWeight(amount) {
+            weight += amount;
+            weight = Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, weight));
+            
+            const displayVal = weight.toFixed(1) + ' kg';
+            weightDisplay.textContent = displayVal;
+
+            // 変動値のインジケータ演出
+            if (amount > 0) {
+                weightChange.textContent = `+${amount.toFixed(1)}kg`;
+                weightChange.className = 'text-sm font-bold text-red-500 animate-bounce';
+                // 太ると赤くなる
+                if (weight > 130) {
+                    weightDisplay.className = 'text-2xl font-black text-red-500 animate-pulse';
+                } else if (weight > 115) {
+                    weightDisplay.className = 'text-2xl font-black text-orange-400';
+                } else {
+                    weightDisplay.className = 'text-2xl font-black text-white';
+                }
+            } else if (amount < 0) {
+                weightChange.textContent = `${amount.toFixed(1)}kg`;
+                weightChange.className = 'text-sm font-bold text-emerald-400 animate-bounce';
+                if (weight <= 115) {
+                    weightDisplay.className = 'text-2xl font-black text-emerald-400';
+                }
+            }
+        }
+
+        // メインゲームループ
+        function update(timestamp) {
+            const rect = canvas.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+
+            // 背景クリア
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, width, height);
+
+            // 背景の道場風グリッド（薄い線）
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < width; x += 40) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < height; y += 40) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
+
+            if (state === 'playing') {
+                // 自動カロリー消費（社長の基礎代謝スクワット：1秒に約0.08kg減少）
+                updateWeight(-0.0015);
+
+                // 食材の生成
+                spawnFood(timestamp);
+
+                // スクワット周期を進める
+                squatCycle += 0.12;
+
+                // shinの移動補間（なめらかにターゲットへ近づく）
+                nakamuraX += (nakamuraTargetX - nakamuraX) * 0.25;
+                if (nakamuraSlashCooldown > 0) nakamuraSlashCooldown--;
+            }
+
+            // --- 描画：社長 (スクワットする男) ---
+            const tanaX = width / 2;
+            const tanaY = height - 70;
+            // スクワットによる縦伸縮
+            const squatOffset = state === 'playing' ? Math.sin(squatCycle) * 12 : 0;
+            // 体重に応じた横幅のスケール比
+            const weightRatio = weight / 100.0; // 100kgを標準とする
+
+            ctx.save();
+            ctx.translate(tanaX, tanaY + squatOffset);
+            ctx.scale(weightRatio, 2.0 - weightRatio); // 太ると横に広がり縦に縮む
+
+            // 1. 体躯（マッスルな逆三角形 / 太ると丸くなる）
+            ctx.fillStyle = '#ea580c'; // 赤・オレンジのタイツイメージ
+            ctx.beginPath();
+            ctx.arc(0, -10, 28, 0, Math.PI, true);
+            ctx.lineTo(-20, 20);
+            ctx.lineTo(20, 20);
+            ctx.closePath();
+            ctx.fill();
+
+            // 肩の筋肉・腕
+            ctx.fillStyle = '#fdba74'; // 肌色
+            ctx.beginPath();
+            ctx.arc(-26, -18, 10, 0, Math.PI * 2); // 左肩
+            ctx.arc(26, -18, 10, 0, Math.PI * 2); // 右肩
+            ctx.fill();
+
+            // 腕のポーズ（スクワット中は頭の後ろ、または前で組む）
+            ctx.strokeStyle = '#fdba74';
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.moveTo(-26, -18);
+            ctx.lineTo(-12, -32);
+            ctx.lineTo(0, -32);
+            ctx.lineTo(12, -32);
+            ctx.lineTo(26, -18);
+            ctx.stroke();
+
+            // 2. 頭部
+            ctx.fillStyle = '#fdba74';
+            ctx.beginPath();
+            ctx.arc(0, -34, 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 髪の毛（社長カット：少し長めの茶髪）
+            ctx.fillStyle = '#b45309';
+            ctx.beginPath();
+            ctx.arc(0, -38, 13, Math.PI, 0); // 頭頂部
+            ctx.fill();
+            // 横髪
+            ctx.fillRect(-13, -38, 4, 14);
+            ctx.fillRect(9, -38, 4, 14);
+
+            // 表情（きつそうな顔、太ると苦悶の表情）
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 1.5;
+            if (weight > 130) {
+                // 限界表情 (>_<)
+                ctx.beginPath();
+                ctx.moveTo(-6, -35); ctx.lineTo(-2, -37); ctx.lineTo(-6, -39);
+                ctx.moveTo(6, -35); ctx.lineTo(2, -37); ctx.lineTo(6, -39);
+                // 口
+                ctx.moveTo(-4, -28); ctx.quadraticCurveTo(0, -32, 4, -28);
+                ctx.stroke();
+            } else {
+                // 通常トレーニング顔
+                ctx.fillStyle = '#000000';
+                ctx.beginPath();
+                ctx.arc(-4, -35, 1.5, 0, Math.PI * 2);
+                ctx.arc(4, -35, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+                // にやり口元（エースの余裕）
+                ctx.beginPath();
+                ctx.arc(0, -30, 4, 0, Math.PI);
+                ctx.stroke();
+            }
+
+            // タイツの装飾（エースの★マーク、またはゴールドライン）
+            ctx.fillStyle = '#facc15'; // ゴールド
+            ctx.font = 'bold 9px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('★GO★', 0, 5);
+
+            ctx.restore();
+
+
+            // --- 描画：shin (居合いの達人) ---
+            // 社長より少し上のレイヤーで、プレイヤーのスワイプ地点に追従する
+            const nakaY = height - 150;
+            ctx.save();
+            ctx.translate(nakamuraX, nakaY);
+
+            // 1. 赤いレザージャケット風の体
+            ctx.fillStyle = '#dc2626'; // 真っ赤なコスチューム
+            ctx.beginPath();
+            ctx.moveTo(-15, 0);
+            ctx.lineTo(15, 0);
+            ctx.lineTo(10, 35);
+            ctx.lineTo(-10, 35);
+            ctx.closePath();
+            ctx.fill();
+
+            // 2. 頭部
+            ctx.fillStyle = '#fdba74';
+            ctx.beginPath();
+            ctx.arc(0, -12, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 特徴的なアシメ黒髪（左側が刈り上げ、右が長いスタイル）
+            ctx.fillStyle = '#1e293b';
+            ctx.beginPath();
+            ctx.arc(0, -15, 11, Math.PI * 1.1, Math.PI * 1.9); // 頭頂部
+            ctx.fill();
+            // 右側へ垂れる長い前髪
+            ctx.beginPath();
+            ctx.moveTo(2, -15);
+            ctx.lineTo(11, -5);
+            ctx.lineTo(5, -2);
+            ctx.closePath();
+            ctx.fill();
+
+            // 3. 居合いの刀（または滾るポーズ）
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = 3;
+            if (nakamuraSlashCooldown > 0) {
+                // 斬撃の瞬間（刀を大きく一閃！）
+                ctx.beginPath();
+                ctx.moveTo(-5, 5);
+                ctx.lineTo(-35, -25); // 刀身
+                ctx.stroke();
+                // 刀の光の軌跡
+                ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+                ctx.lineWidth = 10;
+                ctx.beginPath();
+                ctx.arc(0, 0, 40, Math.PI * 1.1, Math.PI * 1.7);
+                ctx.stroke();
+            } else {
+                // 納刀状態（柄に手をかけていつでも抜ける構え）
+                ctx.strokeStyle = '#475569';
+                ctx.beginPath();
+                ctx.moveTo(2, 15);
+                ctx.lineTo(20, 25); // 鞘
+                ctx.stroke();
+                // 柄
+                ctx.strokeStyle = '#e2e8f0';
+                ctx.beginPath();
+                ctx.moveTo(2, 15);
+                ctx.lineTo(-5, 10);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+
+
+            // --- 食材の更新＆描画 ---
+            for (let i = foodItems.length - 1; i >= 0; i--) {
+                const f = foodItems[i];
+                if (state === 'playing') {
+                    f.y += f.speed;
+                    f.angle += f.rotSpeed;
+                }
+
+                ctx.save();
+                ctx.translate(f.x, f.y);
+                ctx.rotate(f.angle);
+                
+                // エミッタ風の光
+                if (f.type.isBad) {
+                    // 高カロリー食は赤っぽく警告
+                    ctx.shadowColor = '#ef4444';
+                    ctx.shadowBlur = 10;
+                } else {
+                    // プロテインは青く輝く
+                    ctx.shadowColor = '#38bdf8';
+                    ctx.shadowBlur = 10;
+                }
+
+                // 絵文字の描画
+                ctx.font = `${f.size}px serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(f.type.emoji, 0, 0);
+                ctx.restore();
+
+                // 画面外（下部）に到達した＝社長が食べた判定
+                if (f.y > height - 85) {
+                    if (state === 'playing') {
+                        if (f.type.isBad) {
+                            // 激太り
+                            updateWeight(f.type.calories);
+                            playSound('eat_bad');
+                            addFloatingText(`ゴクッ！ +${f.type.calories.toFixed(1)}kg`, width / 2, height - 120, '#ef4444');
+                        } else {
+                            // プロテイン等は良い効果
+                            updateWeight(f.type.calories); // マイナス加算
+                            playSound('eat_good');
+                            addFloatingText(`愛してまーす！ ${f.type.calories.toFixed(1)}kg`, width / 2, height - 120, '#34d399');
+                        }
+                    }
+                    foodItems.splice(i, 1);
+                }
+            }
+
+
+            // --- 斬撃エフェクト線の描画 ---
+            if (slashLine && slashLine.age < 12) {
+                const alpha = (12 - slashLine.age) / 12;
+                ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+                ctx.lineWidth = 4;
+                ctx.shadowColor = '#38bdf8';
+                ctx.shadowBlur = 15;
+                ctx.beginPath();
+                ctx.moveTo(slashLine.start.x, slashLine.start.y);
+                ctx.lineTo(slashLine.end.x, slashLine.end.y);
+                ctx.stroke();
+                
+                ctx.shadowBlur = 0; // リセット
+                if (state === 'playing') slashLine.age++;
+            }
+
+
+            // --- パーティクル更新＆描画 ---
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                if (state === 'playing') {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.alpha -= p.decay;
+                }
+
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.alpha;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1.0; // リセット
+
+
+            // --- 浮遊テキスト更新＆描画 ---
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                const t = floatingTexts[i];
+                if (state === 'playing') {
+                    t.x += t.vx;
+                    t.y += t.vy;
+                    t.alpha -= 0.02;
+                }
+
+                if (t.alpha <= 0) {
+                    floatingTexts.splice(i, 1);
+                    continue;
+                }
+
+                ctx.fillStyle = t.color;
+                ctx.globalAlpha = t.alpha;
+                ctx.font = 'bold 14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(t.text, t.x, t.y);
+            }
+            ctx.globalAlpha = 1.0; // リセット
+
+
+            // --- ゲームオーバー判定 ---
+            if (state === 'playing' && weight >= MAX_WEIGHT) {
+                state = 'gameover';
+                playSound('gameover');
+                
+                finalScore.textContent = `${score} 斬`;
+                finalWeight.textContent = `${weight.toFixed(1)} kg`;
+                gameoverScreen.classList.remove('hidden');
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        // 入力ハンドリング (スワイプ/ドラッグで居合い斬り)
+        let isDrawing = false;
+        let lastPos = { x: 0, y: 0 };
+
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            // マルチタッチ対応
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function startSlash(e) {
+            if (state !== 'playing') return;
+            isDrawing = true;
+            const pos = getMousePos(e);
+            lastPos = pos;
+            nakamuraTargetX = pos.x; // shinがスワイプ開始位置に向けて動く
+        }
+
+        function moveSlash(e) {
+            if (!isDrawing || state !== 'playing') return;
+            const pos = getMousePos(e);
+            
+            // 一定距離以上スワイプしたら斬撃を発生
+            const dist = Math.hypot(pos.x - lastPos.x, pos.y - lastPos.y);
+            if (dist > 15) {
+                slashLine = {
+                    start: { x: lastPos.x, y: lastPos.y },
+                    end: { x: pos.x, y: pos.y },
+                    age: 0
+                };
+                
+                // コリジョンチェック
+                checkSlash(lastPos.x, lastPos.y, pos.x, pos.y);
+                
+                // shinを追従
+                nakamuraTargetX = pos.x;
+                lastPos = pos;
+            }
+        }
+
+        function endSlash() {
+            isDrawing = false;
+        }
+
+        // イベントリスナーの登録
+        canvas.addEventListener('mousedown', startSlash);
+        canvas.addEventListener('mousemove', moveSlash);
+        window.addEventListener('mouseup', endSlash);
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startSlash(e);
+        }, { passive: false });
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            moveSlash(e);
+        }, { passive: false });
+        window.addEventListener('touchend', endSlash);
+
+        // ボタンのリスナー
+        startBtn.addEventListener('click', initGame);
+        restartBtn.addEventListener('click', initGame);
+
+        // ループ開始
+        requestAnimationFrame(update);
+    </script>
+</body>
+</html>
